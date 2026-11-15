@@ -58,6 +58,15 @@ def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
     return ActionResult(ok=True, message=message, entry=entry)
 
 
+@router.get("/{entry_id}/xref-snapshot")
+def xref_snapshot(entry_id: int) -> dict[str, Any]:
+    """下游读取面：模型封装读取绑定关联规则的最新完整字段匹配快照。"""
+    snapshot, message = service.xref_snapshot(entry_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail=message)
+    return snapshot
+
+
 @router.get("/export")
 def export_entries() -> dict[str, Any]:
     """导出数据模型封装清单：返回当前过滤条件下的全量数据。"""

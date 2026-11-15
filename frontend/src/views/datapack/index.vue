@@ -36,7 +36,7 @@
       </thead>
       <tbody>
         <tr v-for="row in rows" :key="String(row.id)">
-          <td v-for="column in columns" :key="column">{{ row[column] ?? '—' }}</td>
+          <td v-for="column in columns" :key="column">{{ row[column] || '—' }}</td>
           <td class="row-actions">
             <button
               v-for="action in actions"
@@ -47,6 +47,7 @@
             >
               {{ action }}
             </button>
+            <button class="link" type="button" @click="showXrefSnapshot(row)">关联快照</button>
           </td>
         </tr>
         <tr v-if="!rows.length">
@@ -54,6 +55,8 @@
         </tr>
       </tbody>
     </table>
+
+    <p v-if="snapshotMessage" class="snapshot-message">{{ snapshotMessage }}</p>
 
     <footer class="page-foot">
       <span>共 {{ total }} 条数据模型封装记录</span>
@@ -70,7 +73,7 @@ import { request } from '@/api/client'
 type Row = Record<string, string | number | null>
 
 const ENDPOINT = '/api/datapack'
-const columns = ["封装编号", "封装名称", "原始数据源", "输出结构", "字段映射", "聚合规则", "缓存策略", "封装状态"]
+const columns = ["封装编号", "封装名称", "原始数据源", "输出结构", "字段映射", "聚合规则", "缓存策略", "封装状态", "快照版本"]
 const actions = ["发布封装", "废弃封装", "删除封装"]
 const statuses = ["草稿", "已封装", "已发布", "已废弃"]
 const stats = [{"label": "模型封装总数", "value": 0}, {"label": "已发布封装", "value": 0}, {"label": "已废弃封装", "value": 0}]
@@ -78,6 +81,7 @@ const stats = [{"label": "模型封装总数", "value": 0}, {"label": "已发布
 const rows = ref<Row[]>([])
 const total = ref(0)
 const errorMessage = ref('')
+const snapshotMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
 
@@ -99,7 +103,7 @@ async function runAction(action: string, row: Row) {
   try {
     const response = await request(`${ENDPOINT}/${row.id}/actions`, {
       method: 'POST',
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ values: { action } }),
     })
     if (!response.ok) {
       throw new Error('数据模型封装动作未生效，请稍后重试')
@@ -107,6 +111,21 @@ async function runAction(action: string, row: Row) {
     await reload()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '数据模型封装操作失败'
+  }
+}
+
+async function showXrefSnapshot(row: Row) {
+  errorMessage.value = ''
+  snapshotMessage.value = ''
+  try {
+    const response = await request(`${ENDPOINT}/${row.id}/xref-snapshot`)
+    const payload = await response.json()
+    if (!response.ok) {
+      throw new Error(payload.detail ?? '读取关联快照失败')
+    }
+    snapshotMessage.value = `封装 ${row.封装编号} 读取关联规则 ${payload.规则编号} 的最新完整快照：v${payload.版本}（水位 ${payload.水位 || '—'}，字段 ${payload.字段?.length ?? 0} 个，记录 ${payload.记录数 ?? 0} 条）`
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '读取关联快照失败'
   }
 }
 
@@ -128,3 +147,11 @@ async function reload() {
 
 onMounted(reload)
 </script>
+
+<style scoped>
+.snapshot-message {
+  font-size: 13px;
+  color: var(--brand);
+  margin: 8px 0 0;
+}
+</style>

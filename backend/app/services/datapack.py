@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.services.crossref import latest_complete_snapshot
 from app.store import store
 
 MODULE = "datapack"
@@ -59,3 +60,16 @@ class DatapackService:
         entry["pending"] = target != STATUS_ORDER[-1]
         entry["abnormal"] = action in NEGATIVE_ACTIONS
         return entry, f"模型封装已{action}"
+
+    def xref_snapshot(self, entry_id: int) -> tuple[dict[str, Any] | None, str]:
+        """下游读取面：模型封装读取绑定关联规则的最新完整字段匹配快照。"""
+        entry = store.find(MODULE, entry_id)
+        if entry is None:
+            return None, f"模型封装 {entry_id} 不存在或已归档"
+        rule_no = str(entry.get("关联规则编号") or "").strip()
+        if not rule_no:
+            return None, f"模型封装 {entry.get('封装编号')} 未绑定跨源关联规则"
+        snapshot = latest_complete_snapshot(rule_no)
+        if snapshot is None:
+            return None, f"关联规则 {rule_no} 暂无完整快照，请先完成一次增量刷新"
+        return snapshot, ""
